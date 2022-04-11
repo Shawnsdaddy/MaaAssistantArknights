@@ -37,11 +37,16 @@ bool asst::RoguelikeBattleTaskPlugin::_run()
 {
     bool getted_info = get_stage_info();
 
-    //speed_up();
-
     if (!getted_info) {
-        return true;
+        // 寄了，摆烂
+        speed_up();
+        return false;
     }
+
+    while (!analyze_opers_preview()) {
+        std::this_thread::yield();
+    }
+    speed_up();
 
     while (!need_exit()) {
         // 不在战斗场景，且已使用过了干员，说明已经打完了，就结束循环
@@ -134,7 +139,97 @@ bool asst::RoguelikeBattleTaskPlugin::get_stage_info()
         callback(AsstMsg::SubTaskExtraInfo, basic_info_with_what("StageInfoError"));
     }
 
+    if (Resrc.roguelike().contains_actions(m_stage_name)) {
+        m_copilot_actions = Resrc.roguelike().get_actions(m_stage_name);
+    }
+
     return calced;
+}
+
+bool asst::RoguelikeBattleTaskPlugin::analyze_opers_preview()
+{
+    BattleImageAnalyzer oper_analyzer;
+    oper_analyzer.set_target(BattleImageAnalyzer::Target::Oper);
+
+    while (true) {
+        oper_analyzer.set_image(m_ctrler->get_image());
+        if (oper_analyzer.analyze()) {
+            break;
+        }
+        std::this_thread::yield();
+    }
+
+    //#ifdef ASST_DEBUG
+    auto draw = m_ctrler->get_image();
+    for (const auto& [loc, info] : m_normal_tile_info) {
+        std::string text = "( " + std::to_string(loc.x) + ", " + std::to_string(loc.y) + " )";
+        cv::putText(draw, text, cv::Point(info.pos.x - 30, info.pos.y), 1, 1.2, cv::Scalar(0, 0, 255), 2);
+    }
+#ifdef WIN32
+    std::string output_filename = utils::utf8_to_gbk(m_stage_name);
+#else
+    std::string output_filename = m_stage_name;
+#endif
+    cv::imwrite(output_filename + ".png", draw);
+    //#endif
+
+    // 干员头像出来之后，还要过 3 秒左右才可以点击，这里要加个延时
+    sleep(Task.get("BattleWaitingToLoad")->rear_delay);
+    battle_pause();
+
+    auto opers = oper_analyzer.get_opers();
+
+    for (size_t i = 0; i != opers.size(); ++i) {
+        const auto& cur_oper = oper_analyzer.get_opers();
+        size_t offset = opers.size() > cur_oper.size() ? opers.size() - cur_oper.size() : 0;
+        m_ctrler->click(cur_oper.at(i - offset).rect);
+
+        sleep(Task.get("BattleUseOper")->pre_delay);
+
+        auto image = m_ctrler->get_image();
+
+        OcrImageAnalyzer name_analyzer(image);
+        name_analyzer.set_task_info("BattleOperName");
+        name_analyzer.set_replace(
+            std::dynamic_pointer_cast<OcrTaskInfo>(
+                Task.get("Roguelike1RecruitData"))
+            ->replace_map);
+
+        std::string oper_name = "Unknown";
+        if (name_analyzer.analyze()) {
+            name_analyzer.sort_result_by_score();
+            oper_name = name_analyzer.get_result().front().text;
+        }
+        opers.at(i).name = oper_name;
+
+        bool not_found = true;
+        // 找出这个干员是哪个组里的，以及他的技能用法等
+        for (const auto& [group_name, deploy_opers] : m_actions_group.groups) {
+            auto iter = std::find_if(deploy_opers.cbegin(), deploy_opers.cend(),
+                [&](const BattleDeployOper& deploy) -> bool {
+                    return deploy.name == oper_name;
+                });
+            if (iter != deploy_opers.cend()) {
+                m_group_to_oper_mapping.emplace(group_name, *iter);
+                not_found = false;
+                break;
+            }
+        }
+        // 没找到，可能是召唤物等新出现的
+        if (not_found) {
+            m_group_to_oper_mapping.emplace(oper_name, BattleDeployOper{ oper_name });
+        }
+
+        m_cur_opers_info.emplace(std::move(oper_name), std::move(opers.at(i)));
+
+        // 干员特别多的时候，任意干员被点开，都会导致下方的干员图标被裁剪和移动。所以这里需要重新识别一下
+        oper_analyzer.set_image(image);
+        oper_analyzer.analyze();
+    }
+    battle_pause();
+    cancel_selection();
+
+    return true;
 }
 
 bool asst::RoguelikeBattleTaskPlugin::auto_battle()
@@ -149,23 +244,6 @@ bool asst::RoguelikeBattleTaskPlugin::auto_battle()
     if (!battle_analyzer.analyze()) {
         return false;
     }
-
-    //if (int hp = battle_analyzer.get_hp();
-    //    hp != 0) {
-    //    bool used_skills = false;
-    //    if (hp < m_pre_hp) {    // 说明漏怪了，漏怪就开技能（
-    //        for (const Rect& rect : battle_analyzer.get_ready_skills()) {
-    //            used_skills = true;
-    //            if (!use_skill(rect)) {
-    //                break;
-    //            }
-    //        }
-    //    }
-    //    m_pre_hp = hp;
-    //    if (used_skills) {
-    //        return true;
-    //    }
-    //}
 
     for (const Rect& rect : battle_analyzer.get_ready_skills()) {
         // 找出这个可以使用的技能是哪个干员的（根据之前放干员的位置）
@@ -317,8 +395,19 @@ bool asst::RoguelikeBattleTaskPlugin::auto_battle()
 
 bool asst::RoguelikeBattleTaskPlugin::speed_up()
 {
-    ProcessTask task(*this, { "Roguelike1BattleSpeedUp" });
-    return task.run();
+    // 确认进入战斗界面后，再尝试去点二倍速
+    BattleImageAnalyzer oper_analyzer;
+    oper_analyzer.set_target(BattleImageAnalyzer::Target::Oper);
+
+    while (true) {
+        oper_analyzer.set_image(m_ctrler->get_image());
+        if (oper_analyzer.analyze()) {
+            break;
+        }
+        std::this_thread::yield();
+    }
+
+    return ProcessTask(*this, { "BattleSpeedUp" }).run();
 }
 
 bool asst::RoguelikeBattleTaskPlugin::use_skill(const asst::Rect& rect)

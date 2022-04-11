@@ -53,6 +53,8 @@ namespace asst
 
     struct BattleAction             // 操作
     {
+        virtual ~BattleAction();
+
         int kills = 0;
         BattleActionType type = BattleActionType::Deploy;
         std::string group_name;     // 目标名，若 type >= SwitchSpeed, group_name 为空
@@ -92,7 +94,7 @@ namespace asst
         Rect rect;
         cv::Mat avatar;
         std::string name;
-        size_t index;
+        size_t index = 0;
         bool cooling = false;
         bool operator==(const std::string& oper_name) const noexcept
         {
@@ -100,16 +102,11 @@ namespace asst
         }
     };
 
-    struct RoguelikeBattleAction
+    struct RoguelikeBattleAction : public BattleAction
     {
-        int kills = 0;
-        BattleActionType type = BattleActionType::Deploy;
+        virtual ~RoguelikeBattleAction() = default;
+
         std::vector<BattleRole> roles;
         bool waiting_cost = false;
-        Point location;
-        BattleDeployDirection direction = BattleDeployDirection::Right;
-        int pre_delay = 0;
-        int rear_delay = 0;
-        int time_out = INT_MAX;
     };
 }

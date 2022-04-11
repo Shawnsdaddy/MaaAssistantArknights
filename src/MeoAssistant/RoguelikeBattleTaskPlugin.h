@@ -26,6 +26,8 @@ namespace asst
         virtual bool _run() override;
 
         bool get_stage_info();
+        bool analyze_opers_preview();
+
         bool auto_battle();
         bool speed_up();
         bool use_skill(const Rect& rect);
@@ -44,6 +46,8 @@ namespace asst
 
         std::unordered_map<Point, TilePack::TileInfo> m_side_tile_info;
         std::unordered_map<Point, TilePack::TileInfo> m_normal_tile_info;
+        std::vector<RoguelikeBattleAction> m_copilot_actions;
+
         std::vector<Point> m_homes;
         size_t m_cur_home_index = 0;
         std::unordered_map<Point, std::string> m_used_tiles;

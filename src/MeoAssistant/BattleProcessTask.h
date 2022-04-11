@@ -26,8 +26,11 @@ namespace asst
         bool analyze_opers_preview();
         bool update_opers_info(const cv::Mat& image);
 
-        bool do_action(const BattleAction& action);
-        bool wait_condition(const BattleAction& action);
+        virtual bool do_action(const BattleAction& action);
+
+        virtual bool wait_condition(const BattleAction& action);
+        bool wait_kills(int kills);
+        bool wait_cost(const std::string& name);
 
         bool oper_deploy(const BattleAction& action);
         bool oper_retreat(const BattleAction& action);
@@ -35,6 +38,7 @@ namespace asst
 
         bool try_possible_skill(const cv::Mat& image);
         void sleep_with_possible_skill(unsigned millisecond);
+        void use_all_intime_skill();
 
         std::string m_stage_name;
 

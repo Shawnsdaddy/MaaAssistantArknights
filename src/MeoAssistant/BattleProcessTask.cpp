@@ -73,21 +73,23 @@ bool asst::BattleProcessTask::analyze_opers_preview()
         std::this_thread::yield();
     }
 
-    //#ifdef ASST_DEBUG
-    auto draw = m_ctrler->get_image();
-    for (const auto& [loc, info] : m_normal_tile_info) {
-        std::string text = "( " + std::to_string(loc.x) + ", " + std::to_string(loc.y) + " )";
-        cv::putText(draw, text, cv::Point(info.pos.x - 30, info.pos.y), 1, 1.2, cv::Scalar(0, 0, 255), 2);
-    }
+    {
+        //#ifdef ASST_DEBUG
+        auto draw = m_ctrler->get_image();
+        for (const auto& [loc, info] : m_normal_tile_info) {
+            std::string text = "( " + std::to_string(loc.x) + ", " + std::to_string(loc.y) + " )";
+            cv::putText(draw, text, cv::Point(info.pos.x - 30, info.pos.y), 1, 1.2, cv::Scalar(0, 0, 255), 2);
+        }
 #ifdef WIN32
-    std::string output_filename = utils::utf8_to_gbk(m_stage_name);
+        std::string output_filename = utils::utf8_to_gbk(m_stage_name);
 #else
-    std::string output_filename = m_stage_name;
+        std::string output_filename = m_stage_name;
 #endif
-    cv::imwrite(output_filename + ".png", draw);
-    //#endif
+        cv::imwrite(output_filename + ".png", draw);
+        //#endif
+    }
 
-    // 干员头像出来之后，还要过 2 秒左右才可以点击，这里要加个延时
+    // 干员头像出来之后，还要过 3 秒左右才可以点击，这里要加个延时
     sleep(Task.get("BattleWaitingToLoad")->rear_delay);
     battle_pause();
 
@@ -276,6 +278,10 @@ bool asst::BattleProcessTask::do_action(const BattleAction& action)
         m_used_opers[oper_info.name].info.skill_usage = action.modify_usage;
         return true;
     } break;
+    case BattleActionType::UseAllSkill:
+        use_all_intime_skill();
+        ret = true;
+        break;
     }
     sleep_with_possible_skill(action.rear_delay);
 
@@ -284,14 +290,27 @@ bool asst::BattleProcessTask::do_action(const BattleAction& action)
 
 bool asst::BattleProcessTask::wait_condition(const BattleAction& action)
 {
-    while (m_kills < action.kills) {
+    wait_kills(action.kills);
+
+    // 部署干员还有额外等待费用够或 CD 转好
+    if (action.type == BattleActionType::Deploy) {
+        const std::string& name = m_group_to_oper_mapping[action.group_name].name;
+        wait_cost(name);
+    }
+
+    return true;
+}
+
+bool asst::BattleProcessTask::wait_kills(int kills)
+{
+    while (m_kills < kills) {
         const auto& image = m_ctrler->get_image();
         BattleImageAnalyzer analyzer(image);
 
         analyzer.set_target(BattleImageAnalyzer::Target::Kills);
         if (analyzer.analyze()) {
             m_kills = analyzer.get_kills();
-            if (m_kills >= action.kills) {
+            if (kills <= m_kills) {
                 break;
             }
         }
@@ -299,26 +318,23 @@ bool asst::BattleProcessTask::wait_condition(const BattleAction& action)
         try_possible_skill(image);
         std::this_thread::yield();
     }
+}
 
-    // 部署干员还有额外等待费用够或 CD 转好
-    if (action.type == BattleActionType::Deploy) {
-        const std::string& name = m_group_to_oper_mapping[action.group_name].name;
+bool asst::BattleProcessTask::wait_cost(const std::string& name)
+{
+    while (true) {
+        const auto& image = m_ctrler->get_image();
+        update_opers_info(image);
 
-        while (true) {
-            const auto& image = m_ctrler->get_image();
-            update_opers_info(image);
+        if (auto iter = m_cur_opers_info.find(name);
+            iter != m_cur_opers_info.cend() && iter->second.available) {
+            break;
+        }
 
-            if (auto iter = m_cur_opers_info.find(name);
-                iter != m_cur_opers_info.cend() && iter->second.available) {
-                break;
-            }
-
-            try_possible_skill(image);
-            std::this_thread::yield();
-        };
-    }
-
-    return true;
+        try_possible_skill(image);
+        std::this_thread::yield();
+    };
+    return false;
 }
 
 bool asst::BattleProcessTask::oper_deploy(const BattleAction& action)
@@ -436,7 +452,7 @@ bool asst::BattleProcessTask::try_possible_skill(const cv::Mat& image)
             continue;
         }
         m_ctrler->click(info.pos);
-        used |= ProcessTask(*this, { "BattleSkillReadyOnClick" }).run();
+        used |= ProcessTask(*this, { "BattleUseSkill" }).run();
         if (info.info.skill_usage == BattleSkillUsage::Once) {
             info.info.skill_usage = BattleSkillUsage::OnceUsed;
         }
@@ -464,6 +480,27 @@ void asst::BattleProcessTask::sleep_with_possible_skill(unsigned millisecond)
         std::this_thread::yield();
     }
     Log.trace("end of sleep_with_possible_skill", millisecond);
+}
+
+void asst::BattleProcessTask::use_all_intime_skill()
+{
+    static const Rect& skill_roi_move = Task.get("BattleAutoSkillFlag")->rect_move;
+
+    MatchImageAnalyzer analyzer(m_ctrler->get_image());
+    analyzer.set_task_info("BattleAutoSkillFlag");
+
+    for (auto& [name, info] : m_used_opers) {
+        if (info.info.skill_usage != BattleSkillUsage::InTime) {
+            continue;
+        }
+        const Rect roi = Rect{ info.pos.x, info.pos.y, 0, 0 }.move(skill_roi_move);
+        analyzer.set_roi(roi);
+        if (!analyzer.analyze()) {
+            continue;
+        }
+        m_ctrler->click(info.pos);
+        ProcessTask(*this, { "BattleUseSkill" }).run();
+    }
 }
 
 bool asst::BattleProcessTask::battle_pause()

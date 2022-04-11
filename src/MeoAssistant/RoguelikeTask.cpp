@@ -19,6 +19,7 @@ asst::RoguelikeTask::RoguelikeTask(AsstCallback callback, void* callback_arg)
     m_roguelike_task_ptr->regiseter_plugin<RoguelikeFormationTaskPlugin>();
 
     m_battle_task_ptr = m_roguelike_task_ptr->regiseter_plugin<RoguelikeBattleTaskPlugin>();
+    m_battle_task_ptr->set_retry_times(0);
 
     m_recruit_task_ptr = m_roguelike_task_ptr->regiseter_plugin<RoguelikeRecruitTaskPlugin>();
     m_recruit_task_ptr->set_retry_times(2);

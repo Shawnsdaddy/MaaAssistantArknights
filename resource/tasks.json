@@ -3932,21 +3932,6 @@
             "07e01e78700e6006e007e007e0076006700e1ffe011800700060008001800700"
         ]
     },
-    "Roguelike1BattleSpeedUp": {
-        "template": "BattleSpeedUp.png",
-        "action": "ClickSelf",
-        "roi": [
-            1025,
-            0,
-            149,
-            153
-        ],
-        "maskRange": [
-            100,
-            255
-        ],
-        "templThreshold": 0.95
-    },
     "BattleSkillReady": {
         "roi": [
             0,
@@ -3965,25 +3950,9 @@
             40
         ]
     },
-    "BattleUseSkillBegin": {
-        "algorithm": "JustReturn",
-        "action": "DoNothing",
-        "rearDelay": 1000,
-        "next": [
-            "BattleUseSkill"
-        ]
-    },
     "BattleUseSkill": {
-        "algorithm": "OcrDetect",
-        "text": [
-            "角色"
-        ],
-        "roi": [
-            900,
-            500,
-            380,
-            150
-        ],
+        "algorithm": "JustReturn",
+        "preDelay": 500,
         "action": "ClickRect",
         "specificRect": [
             820,

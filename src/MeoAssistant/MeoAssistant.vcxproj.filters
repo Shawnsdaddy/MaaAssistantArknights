@@ -321,6 +321,9 @@
     <ClInclude Include="RoguelikeCopilotConfiger.h">
       <Filter>头文件\Resource</Filter>
     </ClInclude>
+    <ClInclude Include="RoguelikeBattleProcessTask.h">
+      <Filter>头文件\Task</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Controller.cpp">
@@ -538,6 +541,9 @@
     </ClCompile>
     <ClCompile Include="RoguelikeCopilotConfiger.cpp">
       <Filter>源文件\Resource</Filter>
+    </ClCompile>
+    <ClCompile Include="RoguelikeBattleProcessTask.cpp">
+      <Filter>源文件\Task\Sub</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

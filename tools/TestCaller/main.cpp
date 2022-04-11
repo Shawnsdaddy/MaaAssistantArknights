@@ -72,32 +72,32 @@ int main(/*int argc, char** argv*/)
     //)");
     //    AsstAppendTask(ptr, "Award", R"({})");
     //
-    //AsstAppendTask(ptr, "Roguelike", R"(
-    //{
-    //    "opers": [
-    //        {
-    //            "name": "山",
-    //            "skill": 2,
-    //            "skill_usage": 1
-    //        },
-    //        {
-    //            "name": "梓兰"
-    //        },
-    //        {
-    //            "name": "芙蓉"
-    //        }
-    //    ]
-    //}
-    //)");
+    AsstAppendTask(ptr, "Roguelike", R"(
+    {
+        "opers": [
+            {
+                "name": "棘刺",
+                "skill": 3,
+                "skill_usage": 1
+            },
+            {
+                "name": "梓兰"
+            },
+            {
+                "name": "芙蓉"
+            }
+        ]
+    }
+    )");
 
     //AsstAppendTask(ptr, "Debug", R"({})");
 
-    AsstAppendTask(ptr, "Copilot", R"(
-{
-    "stage_name": "如帝国之影",
-    "formation": true
-}
-)");
+//    AsstAppendTask(ptr, "Copilot", R"(
+//{
+//    "stage_name": "如帝国之影",
+//    "formation": true
+//}
+//)");
 
     AsstStart(ptr);
 
